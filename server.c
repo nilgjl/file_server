@@ -1,5 +1,4 @@
 #include "common.h"
-const int MAX_CLIENTS = 100;
 
 int main()
 {
@@ -23,7 +22,7 @@ int main()
 	}
 
 	//3.监听
-	if(listen(server_fd,3)<0)
+	if(listen(server_fd,128)<0)
 	{
 		perror("listen failed");
                 close(server_fd);

@@ -59,7 +59,7 @@ int send_protocol_header(int cfd, const char *nfilename, const char *filename,in
 // 成功返回 0，文件信息获取失败返回-1，发送失败返回-3
 int send_file_data(int cfd, const char *filename)
 {
-	char buffer[1024];
+	char buffer[4096];
 	ssize_t n;
 	int fd = open(filename,O_RDONLY);
 	if (fd == -1){
