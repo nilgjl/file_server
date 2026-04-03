@@ -1,12 +1,18 @@
 src = $(wildcard *.c)
-targets = $(patsubst %.c, %, $(src))
+obj = $(patsubst %.c, %.o, $(src))
 
-ALL: $(targets)
+all: server client
 
-%: %.c
-	gcc $< -o $@ -Wall -g
+server: server.o handle_client.o
+	gcc $^ -o $@ -Wall -g
+
+client: client.o
+	gcc $^ -o $@ -Wall -g
+
+$(obj): %o: %c
+	gcc -c $< -o $@ -Wall  
 
 clean:
-	rm -f $(targets)
+	rm -f $(obj) server client
 
 .PHONY: all clean

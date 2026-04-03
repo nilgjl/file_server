@@ -94,7 +94,7 @@ int main()
 	printf("已连接到服务器\n");
 	
 	//4.发送
-	const char* requested_filename = "text.txt";
+	const char* requested_filename = "large.bin";
 	char msg[256];
 	snprintf(msg, sizeof(msg), "GET %s", requested_filename); 
 	if(send(sock,msg,strlen(msg),0)<0)
@@ -120,8 +120,11 @@ int main()
 		return -1;
 	}
 	
+	char save_path[128];
+	snprintf(save_path, sizeof(save_path), "downloaded_%lu.txt", pthread_self());
+
      	  // 接收文件
-     	if (recv_file_content(sock, "downloaded.txt", head.file_size) == -1)
+     	if (recv_file_content(sock, save_path, head.file_size) == -1)
 	{
 		printf("文件接收失败\n");
 		close(sock);
