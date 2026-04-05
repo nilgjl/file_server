@@ -18,33 +18,20 @@ int is_valid_filename(const char *filename) {
     return 0; // 合法
 }
 
-// 获取文件大小
-// 成功返回文件大小，失败返回 -1
-off_t get_file_size(const char *filename) {
-	struct stat st;
-	if (stat(filename, &st) == -1) {
-		return -1;
-	}
-	return st.st_size;
-}
-
 // 构造并发送协议头
 // 成功返回 0，协议头发送失败返回-2
-int send_protocol_header(int cfd, const char *nfilename, const char *filename,int status) {
+int send_protocol_header(int cfd, int fd, const char *filename, int status) {
 	struct proto_head head;
-	//判断文件是否能打开
-	int fd = open(nfilename,O_RDONLY);
-        if (fd == -1)
-		status = 404;
-	else
-		close(fd);
 	//构造协议头
 	head.status = status;
 	strncpy(head.filename, filename, sizeof(head.filename) - 1);
 	head.filename[sizeof(head.filename) - 1] = '\0'; 
-
-	head.file_size = get_file_size(nfilename);//获取文件长度
-
+	if (status == 100)//获取文件长度
+	{
+		struct stat st;
+	        fstat(fd, &st);
+        	head.file_size = st.st_size;
+	}
 	// 发送头部
 	int ret = send(cfd, &head, sizeof(head), 0);
 	if (ret == -1) {
@@ -57,27 +44,18 @@ int send_protocol_header(int cfd, const char *nfilename, const char *filename,in
 
 // 发送文件数据
 // 成功返回 0，文件信息获取失败返回-1，发送失败返回-3
-int send_file_data(int cfd, const char *filename)
+int send_file_data(int cfd, int fd)
 {
 	char buffer[4096];
 	ssize_t n;
-	int fd = open(filename,O_RDONLY);
-	if (fd == -1){
-		fprintf(stderr, "[pthread %lu] open failed:%s\n", pthread_self(), strerror(errno));
-
-		return -1;
-	}
 	while ((n = read(fd,buffer,sizeof(buffer)))>0)
 	{
 		if (send(cfd,buffer,n,0) == -1)
 		{
 			fprintf(stderr, "[pthread %lu] send failed:%s\n", pthread_self(), strerror(errno));
-
-			close(fd);
 			return -3;
 		}
 	}
-	close(fd);
 	return 0;
 }
 
@@ -86,14 +64,28 @@ int send_file_data(int cfd, const char *filename)
 // 成功返回 0，文件信息获取失败返回-1,协议头发送失败返回-2,文件发送失败返回-3
 int send_file_to_client(int cfd, const char *nfilename,const char *filename,int status)
 {
+	//判断文件是否能打开
+        int fd = open(nfilename,O_RDONLY);
+        if (fd == -1)
+	{
+		fprintf(stderr, "[pthread %lu] open failed:%s\n", pthread_self(), strerror(errno));
+                status = 404;
+	}
 	int ret;
 	//发送头部
-	if ((ret= (send_protocol_header(cfd, nfilename, filename, status))) != 0)
+	if ((ret= (send_protocol_header(cfd, fd, filename, status))) != 0)
+	{
+		if (fd != -1)
+			close(fd);
         	return ret;
+	}
 	//发送数据
-	if ((ret= (send_file_data(cfd, nfilename))) != 0)
-                return ret;
-
+	if (status == 100)
+	{
+		if ((ret= (send_file_data(cfd, fd))) != 0)
+        	        return ret;
+		close(fd);
+	}
 	return 0;
 }
 
@@ -105,9 +97,12 @@ void* handle_client(void* arg)
 	//1.接收消息
 	char buffer[1024]={0};
 	ssize_t n = read(client_fd,buffer,sizeof(buffer)-1);
-	if(n<0)
+	if (n <= 0)
 	{
-		fprintf(stderr, "[pthread %lu] read failed:%s\n", pthread_self(), strerror(errno));
+		if (n == 0)
+			printf("客户端正常断开\n");
+		else
+			fprintf(stderr, "[pthread %lu] read failed:%s\n", pthread_self(), strerror(errno));
 
 		close(client_fd);
                 return NULL;
@@ -169,8 +164,6 @@ void* handle_client(void* arg)
 				}
 				else
 				{
-					const char *msg_101 = "101 Transfer Complete.OK.\n";
-					send(client_fd,msg_101,strlen(msg_101),0);
                                 	printf("[pthread %lu] 向客户端发送文件成功\n", pthread_self());
 				}
 			}

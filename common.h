@@ -13,7 +13,7 @@
 //协议头
 struct proto_head{
 	int status;
-	char filename[64];
+	char filename[256];
 	off_t file_size;
 	//off_t offset;
 };

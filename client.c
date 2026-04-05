@@ -7,7 +7,10 @@ int recv_protocol_header(int sock,struct proto_head *head)
 	ssize_t n = recv(sock,head,sizeof(struct proto_head),0);
 	if (n != sizeof(struct proto_head))
 	{
-		perror("recv proto head failed");
+		if (n == 0)
+			printf("服务器传输中断\n");
+		else
+			perror("recv proto head failed");
 		return -1;
 	}
 
@@ -50,7 +53,10 @@ int recv_file_content(int sock, const char* save_path,off_t file_size)
 		n = recv(sock, buf, read_size, 0);
 		if (n <= 0)
 		{
-			perror("recv failed");
+			if (n == 0)
+	                        printf("服务器传输中断\n");
+			else
+				perror("recv failed");
 			close(fd);
 			return -1;
 		}
@@ -68,8 +74,15 @@ int recv_file_content(int sock, const char* save_path,off_t file_size)
 	return 0;
 }
 
-int main()
+int main(int argc, char *argv[])
 {
+	// 检查参数
+    	if (argc < 2) {
+	        fprintf(stderr, "用法: %s <文件名>\n", argv[0]);
+ 	        fprintf(stderr, "示例: %s test.txt\n", argv[0]);
+        	return -1;
+ 	   }
+	const char* requested_filename = argv[1];
 	//1. 创建socket
 	int sock = socket(AF_INET,SOCK_STREAM,0);
 	if(sock<0)
@@ -94,8 +107,7 @@ int main()
 	printf("已连接到服务器\n");
 	
 	//4.发送
-	const char* requested_filename = "large.bin";
-	char msg[256];
+	char msg[300];
 	snprintf(msg, sizeof(msg), "GET %s", requested_filename); 
 	if(send(sock,msg,strlen(msg),0)<0)
 	{
@@ -120,8 +132,8 @@ int main()
 		return -1;
 	}
 	
-	char save_path[128];
-	snprintf(save_path, sizeof(save_path), "downloaded_%lu.txt", pthread_self());
+	char save_path[300];
+	snprintf(save_path, sizeof(save_path), "./download/%s_%d", requested_filename, getpid());
 
      	  // 接收文件
      	if (recv_file_content(sock, save_path, head.file_size) == -1)
@@ -134,24 +146,6 @@ int main()
 	{
 		printf("文件接收成功\n");
 	}
-
-	  //接收传输结束状态
-	char buf[256];
-	ssize_t n  = recv(sock, buf, sizeof(buf), 0);
-	if (n <= 0)
-	{
-		perror("recv failed");
-		close(sock);
-		return -1;
-	}
-	if (strncmp(buf, "101", 3) != 0)
-	{
-		printf("未收到文件传输结束状态\n");
-		close(sock);
-		return -1;
-	}
-	else
-		printf("%s",buf);
 
 	//6.关闭
 	close(sock);
